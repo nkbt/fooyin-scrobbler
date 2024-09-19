@@ -27,7 +27,32 @@ class LastFmService : public ScrobblerService
 public:
     LastFmService(NetworkAccessManager* network, SettingsManager* settings, QObject* parent = nullptr);
 
+    [[nodiscard]] QString name() const override;
+    [[nodiscard]] QUrl authUrl() const override;
+    [[nodiscard]] QString username() const override;
+    [[nodiscard]] bool isAuthenticated() const override;
+
+    void loadSession() override;
+    void logout() override;
+
+    void updateNowPlaying() override;
+    void submit() override;
+
 protected:
     void setupAuthQuery(ScrobblerAuthSession* session, QUrlQuery& query) override;
+    void requestAuth(const QString& token) override;
+    void authFinished(QNetworkReply* reply) override;
+
+    ReplyResult getJsonFromReply(QNetworkReply* reply, QJsonObject* obj, QString* errorDesc) override;
+
+private:
+    QNetworkReply* createRequest(const std::map<QString, QString>& params);
+    void updateNowPlayingFinished(QNetworkReply* reply);
+    void scrobbleFinished(QNetworkReply* reply, const CacheItemList& items);
+
+    QString m_apiKey;
+    QString m_secret;
+    QString m_username;
+    QString m_sessionKey;
 };
 } // namespace Fooyin::Scrobbler
