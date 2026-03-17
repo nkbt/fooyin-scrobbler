@@ -147,7 +147,7 @@ void ScrobblerService::authenticate()
     QUrl url{authUrl()};
     url.setQuery(query);
 
-    const QString messageTitle = tr("%1 Authentication").arg(name());
+    const QString messageTitle = tr("Authentication");
     const QString messageSubtitle
         = tr("Open url in web browser?") + u"<br /><br /><a href=\"%1\">%1</a><br />"_s.arg(url.toString());
 
