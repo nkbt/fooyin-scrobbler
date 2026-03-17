@@ -83,7 +83,7 @@ ScrobblerPageWidget::ScrobblerPageWidget(SettingsManager* settings)
     m_scrobbleDelay->setToolTip(delayTip);
 
     m_scrobbleDelay->setRange(0, 600);
-    m_scrobbleDelay->setSuffix(" "_L1 + tr("seconds"));
+    m_scrobbleDelay->setSuffix(u" s"_s);
 
     auto* filterLabel       = new QLabel(tr("Query") + ":"_L1, this);
     const QString filterTip = tr("Enter a query - tracks that match the query will NOT be scrobbled");
