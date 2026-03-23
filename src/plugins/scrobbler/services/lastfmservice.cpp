@@ -74,7 +74,45 @@ enum class ScrobbleError : uint8_t
     Deprecated             = 27,
     RateLimitExceeded      = 29,
 };
+
+QString previewReplyBody(const QByteArray& data)
+{
+    QString body = QString::fromUtf8(data).simplified();
+
+    static constexpr auto MaxPreviewLength = 256;
+    if(body.size() > MaxPreviewLength) {
+        body = body.left(MaxPreviewLength - 3) + "..."_L1;
+    }
+
+    return body;
 }
+
+QString describeReply(QNetworkReply* reply)
+{
+    return u"HTTP %1, network error %2 (%3)"_s.arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt())
+        .arg(reply->errorString())
+        .arg(reply->error());
+}
+
+QString requestMethod(const std::map<QString, QString>& params)
+{
+    if(const auto methodIt = params.find(u"method"_s); methodIt != params.cend()) {
+        return methodIt->second;
+    }
+    return {};
+}
+
+int requestItemCount(const std::map<QString, QString>& params)
+{
+    int count = 0;
+    for(const auto& key : params | std::views::keys) {
+        if(key.startsWith(u"track["_s)) {
+            ++count;
+        }
+    }
+    return count;
+}
+} // namespace
 
 namespace Fooyin::Scrobbler {
 LastFmService::LastFmService(ServiceDetails service, NetworkAccessManager* network, SettingsManager* settings,
@@ -191,8 +229,6 @@ void LastFmService::submit()
         return;
     }
 
-    qCDebug(SCROBBLER) << "Submitting scrobbles (%1)"_L1.arg(name());
-
     std::map<QString, QString> params{{u"method"_s, u"track.scrobble"_s}};
 
     const CacheItemList items = cache()->items();
@@ -231,6 +267,10 @@ void LastFmService::submit()
         return;
     }
 
+    qCDebug(SCROBBLER) << "Preparing scrobble request for" << name() << "count" << sentItems.size() << "pending"
+                       << items.size() << "timestamps" << sentItems.front()->timestamp << "to"
+                       << sentItems.back()->timestamp;
+
     setSubmitted(true);
 
     QNetworkReply* reply = createRequest(params);
@@ -264,8 +304,7 @@ void LastFmService::requestAuth(const QString& token)
     const QString signature = QString::fromLatin1(digest.toHex()).rightJustified(32, u'0').toLower();
 
     urlQuery.addQueryItem(u"api_sig"_s, signature);
-    urlQuery.addQueryItem(QString::fromLatin1(QUrl::toPercentEncoding(u"format"_s)),
-                          QString::fromLatin1(QUrl::toPercentEncoding(u"json"_s)));
+    urlQuery.addQueryItem(u"format"_s, u"json"_s);
     reqUrl.setQuery(urlQuery);
 
     QNetworkRequest req{reqUrl};
@@ -323,14 +362,14 @@ ScrobblerService::ReplyResult LastFmService::getJsonFromReply(QNetworkReply* rep
                                                               QString* errorDesc)
 {
     ReplyResult replyResult{ReplyResult::ServerError};
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
     if(reply->error() == QNetworkReply::NoError) {
-        if(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 200) {
+        if(httpStatus == 200) {
             replyResult = ReplyResult::Success;
         }
         else {
-            *errorDesc
-                = u"Received HTTP code %1"_s.arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
+            *errorDesc = u"Received HTTP code %1"_s.arg(httpStatus);
         }
     }
     else {
@@ -340,12 +379,22 @@ ScrobblerService::ReplyResult LastFmService::getJsonFromReply(QNetworkReply* rep
     if(reply->error() == QNetworkReply::NoError || reply->error() >= 200) {
         const QByteArray data = reply->readAll();
         int errorCode{0};
+        bool parsed{false};
 
-        if(!data.isEmpty() && extractJsonObj(data, obj, errorDesc) && obj->contains("error"_L1)
-           && obj->contains("message"_L1)) {
-            errorCode   = obj->value("error"_L1).toInt();
-            *errorDesc  = u"%1 (%2)"_s.arg(obj->value("message"_L1).toString()).arg(errorCode);
-            replyResult = ReplyResult::ApiError;
+        if(!data.isEmpty()) {
+            parsed = extractJsonObj(data, obj, errorDesc);
+            if(parsed && obj->contains("error"_L1) && obj->contains("message"_L1)) {
+                errorCode   = obj->value("error"_L1).toInt();
+                *errorDesc  = u"%1 (%2)"_s.arg(obj->value("message"_L1).toString()).arg(errorCode);
+                replyResult = ReplyResult::ApiError;
+            }
+        }
+
+        if(replyResult != ReplyResult::Success || (!data.isEmpty() && !parsed)) {
+            qCWarning(SCROBBLER) << "Last.fm reply details:" << describeReply(reply);
+            if(!data.isEmpty()) {
+                qCWarning(SCROBBLER) << "Last.fm reply body:" << previewReplyBody(data);
+            }
         }
 
         const auto lastfmError = static_cast<ScrobbleError>(errorCode);
@@ -354,6 +403,9 @@ ScrobblerService::ReplyResult LastFmService::getJsonFromReply(QNetworkReply* rep
            || lastfmError == ScrobbleError::LoginRequired || lastfmError == ScrobbleError::APIKeySuspended) {
             logout();
         }
+    }
+    else if(replyResult != ReplyResult::Success) {
+        qCWarning(SCROBBLER) << "Last.fm reply details:" << describeReply(reply);
     }
 
     return replyResult;
@@ -369,8 +421,7 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
     QString data;
 
     for(const auto& [key, value] : std::as_const(queryParams)) {
-        queryUrl.addQueryItem(QString::fromLatin1(QUrl::toPercentEncoding(key)),
-                              QString::fromLatin1(QUrl::toPercentEncoding(value)));
+        queryUrl.addQueryItem(key, value);
         data += key + value;
     }
     data += m_secret;
@@ -378,7 +429,7 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
     const QByteArray digest = QCryptographicHash::hash(data.toUtf8(), QCryptographicHash::Md5);
     const QString signature = QString::fromLatin1(digest.toHex()).rightJustified(32, u'0').toLower();
 
-    queryUrl.addQueryItem(u"api_sig"_s, QString::fromLatin1(QUrl::toPercentEncoding(signature)));
+    queryUrl.addQueryItem(u"api_sig"_s, signature);
     queryUrl.addQueryItem(u"format"_s, u"json"_s);
 
     const QUrl reqUrl{url()};
@@ -389,7 +440,9 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
     const QByteArray query = queryUrl.toString(QUrl::FullyEncoded).toUtf8();
 
     QNetworkReply* reply = addReply(network()->post(req, query));
-    qCDebug(SCROBBLER) << "Sending request" << queryUrl.toString(QUrl::FullyDecoded);
+    qCDebug(SCROBBLER) << "POST queued to network manager for" << name() << "method" << requestMethod(params) << "items"
+                       << requestItemCount(params) << "params" << queryParams.size() + 2 << "url" << reqUrl.toString()
+                       << "bodyBytes" << query.size();
 
     return reply;
 }
@@ -424,7 +477,7 @@ void LastFmService::scrobbleFinished(QNetworkReply* reply, const CacheItemList& 
     QString errorStr;
     if(getJsonFromReply(reply, &obj, &errorStr) != ReplyResult::Success) {
         setSubmitError(true);
-        qCWarning(SCROBBLER) << errorStr;
+        qCWarning(SCROBBLER) << "Unable to scrobble for" << name() << "count" << items.size() << ":" << errorStr;
         std::ranges::for_each(items, [](const auto& item) { item->submitted = false; });
         doDelayedSubmit();
         return;

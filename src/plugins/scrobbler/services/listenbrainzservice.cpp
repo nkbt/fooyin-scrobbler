@@ -75,6 +75,25 @@ QJsonObject getTrackMetadata(const Fooyin::Scrobbler::Metadata& metadata)
 
     return metaObj;
 }
+
+QString previewReplyBody(const QByteArray& data)
+{
+    QString body = QString::fromUtf8(data).simplified();
+
+    static constexpr auto MaxPreviewLength = 256;
+    if(body.size() > MaxPreviewLength) {
+        body = body.left(MaxPreviewLength - 3) + "..."_L1;
+    }
+
+    return body;
+}
+
+QString describeReply(QNetworkReply* reply)
+{
+    return u"HTTP %1, network error %2 (%3)"_s.arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt())
+        .arg(reply->errorString())
+        .arg(reply->error());
+}
 } // namespace
 
 namespace Fooyin::Scrobbler {
@@ -162,8 +181,6 @@ void ListenBrainzService::updateNowPlaying()
 
 void ListenBrainzService::submit()
 {
-    qCDebug(SCROBBLER) << "Submitting scrobbles (%1)"_L1.arg(name());
-
     const CacheItemList items = cache()->items();
     CacheItemList sentItems;
 
@@ -191,6 +208,10 @@ void ListenBrainzService::submit()
     if(sentItems.empty()) {
         return;
     }
+
+    qCDebug(SCROBBLER) << "Preparing scrobble request for" << name() << "count" << sentItems.size() << "pending"
+                       << items.size() << "timestamps" << sentItems.front()->timestamp << "to"
+                       << sentItems.back()->timestamp;
 
     setSubmitted(true);
 
@@ -222,12 +243,17 @@ QNetworkReply* ListenBrainzService::createRequest(RequestType type, const QUrl& 
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     req.setHeader(QNetworkRequest::ContentTypeHeader, u"application/json"_s);
     req.setRawHeader("Authorization", u"Token %1"_s.arg(userToken()).toUtf8());
+    const QByteArray payload = json.toJson();
+
+    qCDebug(SCROBBLER) << (type == RequestType::Get ? "GET queued to network manager for"
+                                                    : "POST queued to network manager for")
+                       << name() << "url" << url.toString() << "bodyBytes" << payload.size();
 
     switch(type) {
         case RequestType::Get:
             return addReply(network()->get(req));
         case RequestType::Post:
-            return addReply(network()->post(req, json.toJson()));
+            return addReply(network()->post(req, payload));
     }
 
     return nullptr;
@@ -237,14 +263,14 @@ ScrobblerService::ReplyResult ListenBrainzService::getJsonFromReply(QNetworkRepl
                                                                     QString* errorDesc)
 {
     ReplyResult replyResult{ReplyResult::ServerError};
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
     if(reply->error() == QNetworkReply::NoError) {
-        if(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 200) {
+        if(httpStatus == 200) {
             replyResult = ReplyResult::Success;
         }
         else {
-            *errorDesc
-                = u"Received HTTP code %1"_s.arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt());
+            *errorDesc = u"Received HTTP code %1"_s.arg(httpStatus);
         }
     }
     else {
@@ -253,8 +279,13 @@ ScrobblerService::ReplyResult ListenBrainzService::getJsonFromReply(QNetworkRepl
 
     if(reply->error() == QNetworkReply::NoError || reply->error() >= 200) {
         const QByteArray data = reply->readAll();
+        bool parsed{false};
 
-        if(!data.isEmpty() && extractJsonObj(data, obj, errorDesc)) {
+        if(!data.isEmpty()) {
+            parsed = extractJsonObj(data, obj, errorDesc);
+        }
+
+        if(parsed) {
             if(obj->contains("error"_L1) && obj->contains("error_description"_L1)) {
                 *errorDesc  = obj->value("error_description"_L1).toString();
                 replyResult = ReplyResult::ApiError;
@@ -270,6 +301,16 @@ ScrobblerService::ReplyResult ListenBrainzService::getJsonFromReply(QNetworkRepl
                 logout();
             }
         }
+
+        if(replyResult != ReplyResult::Success || (!data.isEmpty() && !parsed)) {
+            qCWarning(SCROBBLER) << "ListenBrainz reply details:" << describeReply(reply);
+            if(!data.isEmpty()) {
+                qCWarning(SCROBBLER) << "ListenBrainz reply body:" << previewReplyBody(data);
+            }
+        }
+    }
+    else if(replyResult != ReplyResult::Success) {
+        qCWarning(SCROBBLER) << "ListenBrainz reply details:" << describeReply(reply);
     }
 
     return replyResult;
@@ -341,7 +382,7 @@ void ListenBrainzService::scrobbleFinished(QNetworkReply* reply, const CacheItem
     }
     else {
         setSubmitError(true);
-        qCWarning(SCROBBLER) << "Unable to scrobble:" << errorStr;
+        qCWarning(SCROBBLER) << "Unable to scrobble for" << name() << "count" << items.size() << ":" << errorStr;
         std::ranges::for_each(items, [](const auto& item) {
             item->submitted = false;
             item->hasError  = true;

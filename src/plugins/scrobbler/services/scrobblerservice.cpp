@@ -203,10 +203,28 @@ void ScrobblerService::saveCache()
 
 void ScrobblerService::resumePendingSubmissions()
 {
-    if(!m_cache || !isEnabled() || !isAuthenticated()) {
+    if(!m_cache) {
         return;
     }
 
+    const int pendingCount = m_cache->count();
+    if(pendingCount == 0) {
+        return;
+    }
+
+    if(!isEnabled()) {
+        qCDebug(SCROBBLER) << "Pending scrobbles will not resume for disabled service" << name() << "count"
+                           << pendingCount;
+        return;
+    }
+
+    if(!isAuthenticated()) {
+        qCDebug(SCROBBLER) << "Pending scrobbles will not resume until authentication succeeds for" << name() << "count"
+                           << pendingCount;
+        return;
+    }
+
+    qCDebug(SCROBBLER) << "Resuming pending scrobbles for" << name() << "count" << pendingCount;
     doDelayedSubmit();
 }
 
@@ -405,7 +423,16 @@ void ScrobblerService::deleteAll()
 
 void ScrobblerService::doDelayedSubmit(bool initial)
 {
-    if(m_submitted || m_cache->count() == 0) {
+    const int pendingCount = m_cache ? m_cache->count() : 0;
+    if(m_submitted) {
+        if(pendingCount > 0) {
+            qCDebug(SCROBBLER) << "Scrobble submit already in progress for" << name() << "pending count"
+                               << pendingCount;
+        }
+        return;
+    }
+
+    if(pendingCount == 0) {
         return;
     }
 
@@ -415,10 +442,13 @@ void ScrobblerService::doDelayedSubmit(bool initial)
         if(m_submitTimer.isActive()) {
             m_submitTimer.stop();
         }
+        qCDebug(SCROBBLER) << "Submitting pending scrobbles immediately for" << name() << "count" << pendingCount;
         submit();
     }
     else if(!m_submitTimer.isActive()) {
         const int delay = std::max(scrobbleDelay, m_submitError ? MinScrobbleDelayOnError : MinScrobbleDelay);
+        qCDebug(SCROBBLER) << "Scheduling scrobble submit for" << name() << "count" << pendingCount << "delayMs"
+                           << delay << "afterError" << m_submitError;
         m_submitTimer.start(delay, this);
     }
 }
