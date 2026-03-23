@@ -32,6 +32,8 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
+#include <ranges>
+
 using namespace Qt::StringLiterals;
 
 constexpr auto ApiUrl    = "https://ws.audioscrobbler.com/2.0/";
