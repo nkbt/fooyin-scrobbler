@@ -313,6 +313,7 @@ void LastFmService::authFinished(QNetworkReply* reply)
     m_sessionKey = obj.value("key"_L1).toString();
 
     saveSession();
+    resumePendingSubmissions();
 
     emit authenticationFinished(true);
     cleanupAuth();

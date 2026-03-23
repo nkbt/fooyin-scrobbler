@@ -50,6 +50,7 @@ Scrobbler::Scrobbler(PlayerController* playerController, std::shared_ptr<Network
     for(auto& service : m_services) {
         service->initialise();
         service->loadSession();
+        service->resumePendingSubmissions();
     }
 
     QObject::connect(m_playerController, &PlayerController::currentTrackChanged, this, &Scrobbler::updateNowPlaying);

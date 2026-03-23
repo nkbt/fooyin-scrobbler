@@ -78,6 +78,7 @@ public:
     virtual void deleteSession();
     virtual void logout();
     void saveCache();
+    void resumePendingSubmissions();
 
     void updateNowPlaying(const Track& track);
     void refreshNowPlaying();

@@ -201,6 +201,15 @@ void ScrobblerService::saveCache()
     }
 }
 
+void ScrobblerService::resumePendingSubmissions()
+{
+    if(!m_cache || !isEnabled() || !isAuthenticated()) {
+        return;
+    }
+
+    doDelayedSubmit();
+}
+
 void ScrobblerService::updateNowPlaying(const Track& track)
 {
     m_currentTrack = track;
