@@ -37,14 +37,17 @@ public:
     [[nodiscard]] QString name() const override;
     [[nodiscard]] QString layoutName() const override;
 
+protected:
+    void changeEvent(QEvent* event) override;
+
 private:
+    void updateButton();
     void updateButtonStyle() const;
     void scrobblingToggled(bool enabled);
 
     ActionManager* m_actionManager;
     SettingsManager* m_settings;
     ToolButton* m_scrobbleButton;
-    QColor m_iconColour;
 };
 } // namespace Scrobbler
 } // namespace Fooyin

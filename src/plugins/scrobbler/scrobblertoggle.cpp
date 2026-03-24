@@ -29,6 +29,7 @@
 #include <utils/settings/settingsmanager.h>
 #include <utils/utils.h>
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QIcon>
 
@@ -42,7 +43,6 @@ ScrobblerToggle::ScrobblerToggle(ActionManager* actionManager, SettingsManager* 
     , m_actionManager{actionManager}
     , m_settings{settings}
     , m_scrobbleButton{new ToolButton(this)}
-    , m_iconColour{palette().highlight().color()}
 {
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -52,12 +52,11 @@ ScrobblerToggle::ScrobblerToggle(ActionManager* actionManager, SettingsManager* 
         m_scrobbleButton->setDefaultAction(toggleCmd->action());
     }
 
-    scrobblingToggled(m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
-    updateButtonStyle();
+    updateButton();
 
     m_settings->subscribe<Settings::Scrobbler::ScrobblingEnabled>(this, &ScrobblerToggle::scrobblingToggled);
-    settings->subscribe<Settings::Gui::IconTheme>(this, &ScrobblerToggle::updateButtonStyle);
-    settings->subscribe<Settings::Gui::ToolButtonStyle>(this, &ScrobblerToggle::updateButtonStyle);
+    settings->subscribe<Settings::Gui::IconTheme>(this, &ScrobblerToggle::updateButton);
+    settings->subscribe<Settings::Gui::ToolButtonStyle>(this, &ScrobblerToggle::updateButton);
 }
 
 QString ScrobblerToggle::name() const
@@ -68,6 +67,26 @@ QString ScrobblerToggle::name() const
 QString ScrobblerToggle::layoutName() const
 {
     return u"ScrobbleToggle"_s;
+}
+
+void ScrobblerToggle::changeEvent(QEvent* event)
+{
+    FyWidget::changeEvent(event);
+
+    switch(event->type()) {
+        case QEvent::PaletteChange:
+        case QEvent::StyleChange:
+            updateButton();
+            break;
+        default:
+            break;
+    }
+}
+
+void ScrobblerToggle::updateButton()
+{
+    updateButtonStyle();
+    scrobblingToggled(m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
 }
 
 void ScrobblerToggle::updateButtonStyle() const
@@ -82,8 +101,9 @@ void ScrobblerToggle::updateButtonStyle() const
 void ScrobblerToggle::scrobblingToggled(bool enabled)
 {
     if(enabled) {
+        const QColor iconColour = palette().highlight().color();
         m_scrobbleButton->setIcon(
-            Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), m_iconColour));
+            Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), iconColour));
     }
     else {
         m_scrobbleButton->setIcon(Gui::iconFromTheme(ScrobbleIcon));
