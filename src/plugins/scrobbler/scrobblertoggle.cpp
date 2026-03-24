@@ -22,6 +22,7 @@
 #include "settings/scrobblersettings.h"
 
 #include <gui/guisettings.h>
+#include <gui/iconloader.h>
 #include <gui/widgets/toolbutton.h>
 #include <utils/actions/actionmanager.h>
 #include <utils/actions/command.h>
@@ -82,10 +83,10 @@ void ScrobblerToggle::scrobblingToggled(bool enabled)
 {
     if(enabled) {
         m_scrobbleButton->setIcon(
-            Utils::changePixmapColour(Utils::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), m_iconColour));
+            Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), m_iconColour));
     }
     else {
-        m_scrobbleButton->setIcon(Utils::iconFromTheme(ScrobbleIcon));
+        m_scrobbleButton->setIcon(Gui::iconFromTheme(ScrobbleIcon));
     }
 }
 } // namespace Fooyin::Scrobbler
