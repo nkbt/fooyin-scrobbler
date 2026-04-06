@@ -51,7 +51,16 @@ protected:
     ReplyResult getJsonFromReply(QNetworkReply* reply, QJsonObject* obj, QString* errorDesc) override;
 
 private:
+    struct ReplyErrorInfo
+    {
+        int httpStatus{0};
+        int apiErrorCode{0};
+        QString message;
+    };
+
     QNetworkReply* createRequest(const std::map<QString, QString>& params);
+    [[nodiscard]] static QByteArray createRequestBody(const std::map<QString, QString>& params);
+    [[nodiscard]] static ReplyErrorInfo getReplyErrorInfo(QNetworkReply* reply, const QJsonObject& obj);
     void updateNowPlayingFinished(QNetworkReply* reply);
     void scrobbleFinished(QNetworkReply* reply, const CacheItemList& items);
 

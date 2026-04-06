@@ -29,6 +29,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
+#include <QRegularExpression>
 #include <QTimerEvent>
 #include <QUrlQuery>
 
@@ -39,6 +40,34 @@ constexpr auto ApiUrl = "https://api.listenbrainz.org";
 constexpr auto MaxScrobblesPerRequest = 10;
 
 namespace {
+QString normaliseMusicBrainzId(QString value)
+{
+    value = value.trimmed();
+    if(value.isEmpty()) {
+        return {};
+    }
+
+    static const QRegularExpression mbidRegex{
+        uR"(^\{?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}?$)"_s};
+
+    const QRegularExpressionMatch match = mbidRegex.match(value);
+    if(!match.hasMatch()) {
+        return {};
+    }
+
+    return match.captured(1).toLower();
+}
+
+void insertMusicBrainzId(QJsonObject& object, const QString& key, const QString& value)
+{
+    if(const QString mbid = normaliseMusicBrainzId(value); !mbid.isEmpty()) {
+        object.insert(key, mbid);
+    }
+    else if(!value.trimmed().isEmpty()) {
+        qCDebug(SCROBBLER) << "Skipping invalid ListenBrainz MBID field" << key << value;
+    }
+}
+
 QJsonObject getTrackMetadata(const Fooyin::Scrobbler::Metadata& metadata)
 {
     QJsonObject metaObj;
@@ -59,12 +88,8 @@ QJsonObject getTrackMetadata(const Fooyin::Scrobbler::Metadata& metadata)
     if(!metadata.trackNum.isEmpty()) {
         infoObj.insert(u"tracknumber"_s, metadata.trackNum);
     }
-    if(!metadata.musicBrainzId.isEmpty()) {
-        infoObj.insert(u"recording_mbid"_s, metadata.musicBrainzId);
-    }
-    if(!metadata.musicBrainzAlbumId.isEmpty()) {
-        infoObj.insert(u"release_mbid"_s, metadata.musicBrainzAlbumId);
-    }
+    insertMusicBrainzId(infoObj, u"recording_mbid"_s, metadata.musicBrainzId);
+    insertMusicBrainzId(infoObj, u"release_mbid"_s, metadata.musicBrainzAlbumId);
 
     infoObj.insert(u"media_player"_s, QCoreApplication::applicationName());
     infoObj.insert(u"media_player_version"_s, QCoreApplication::applicationVersion());
@@ -80,7 +105,7 @@ QString previewReplyBody(const QByteArray& data)
 {
     QString body = QString::fromUtf8(data).simplified();
 
-    static constexpr auto MaxPreviewLength = 256;
+    static constexpr auto MaxPreviewLength = 512;
     if(body.size() > MaxPreviewLength) {
         body = body.left(MaxPreviewLength - 3) + "..."_L1;
     }
@@ -93,6 +118,16 @@ QString describeReply(QNetworkReply* reply)
     return u"HTTP %1, network error %2 (%3)"_s.arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt())
         .arg(reply->errorString())
         .arg(reply->error());
+}
+
+int replyApiErrorCode(const QJsonObject& obj)
+{
+    return obj.value("code"_L1).toInt();
+}
+
+QString replyApiErrorText(const QJsonObject& obj)
+{
+    return obj.value("error"_L1).toString();
 }
 } // namespace
 
@@ -381,6 +416,19 @@ void ListenBrainzService::scrobbleFinished(QNetworkReply* reply, const CacheItem
         setSubmitError(false);
     }
     else {
+        const int apiErrorCode = replyApiErrorCode(obj);
+        const QString apiError = replyApiErrorText(obj);
+
+        if(apiErrorCode == 400 && items.size() == 1 && items.front()->hasError) {
+            qCWarning(SCROBBLER) << "Discarding cached ListenBrainz scrobble after repeated validation failure:"
+                                 << items.front()->metadata.artist << u"-"_s << items.front()->metadata.title
+                                 << "timestamp" << items.front()->timestamp << "error" << apiError;
+            cache()->flush(items);
+            setSubmitError(false);
+            doDelayedSubmit();
+            return;
+        }
+
         setSubmitError(true);
         qCWarning(SCROBBLER) << "Unable to scrobble for" << name() << "count" << items.size() << ":" << errorStr;
         std::ranges::for_each(items, [](const auto& item) {

@@ -81,7 +81,7 @@ QString previewReplyBody(const QByteArray& data)
 {
     QString body = QString::fromUtf8(data).simplified();
 
-    static constexpr auto MaxPreviewLength = 256;
+    static constexpr auto MaxPreviewLength = 512;
     if(body.size() > MaxPreviewLength) {
         body = body.left(MaxPreviewLength - 3) + "..."_L1;
     }
@@ -113,6 +113,16 @@ int requestItemCount(const std::map<QString, QString>& params)
         }
     }
     return count;
+}
+
+QByteArray encodeQueryKey(const QString& key)
+{
+    return QUrl::toPercentEncoding(key, "[]");
+}
+
+QByteArray encodeQueryValue(const QString& value)
+{
+    return QUrl::toPercentEncoding(value);
 }
 } // namespace
 
@@ -240,6 +250,9 @@ void LastFmService::submit()
         if(item->submitted) {
             continue;
         }
+        if(item->hasError && !sentItems.empty()) {
+            break;
+        }
         item->submitted = true;
         sentItems.emplace_back(item);
 
@@ -259,7 +272,7 @@ void LastFmService::submit()
         if(!md.trackNum.isEmpty()) {
             params.emplace(u"trackNumber[%1]"_s.arg(i), md.trackNum);
         }
-        if(sentItems.size() >= MaxScrobblesPerRequest) {
+        if(sentItems.size() >= MaxScrobblesPerRequest || item->hasError) {
             break;
         }
         ++i;
@@ -419,11 +432,9 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
         {u"api_key"_s, m_apiKey}, {u"sk"_s, m_sessionKey}, {u"lang"_s, QLocale{}.name().left(2).toLower()}};
     queryParams.insert(params.cbegin(), params.cend());
 
-    QUrlQuery queryUrl;
     QString data;
 
     for(const auto& [key, value] : std::as_const(queryParams)) {
-        queryUrl.addQueryItem(key, value);
         data += key + value;
     }
     data += m_secret;
@@ -431,22 +442,52 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
     const QByteArray digest = QCryptographicHash::hash(data.toUtf8(), QCryptographicHash::Md5);
     const QString signature = QString::fromLatin1(digest.toHex()).rightJustified(32, u'0').toLower();
 
-    queryUrl.addQueryItem(u"api_sig"_s, signature);
-    queryUrl.addQueryItem(u"format"_s, u"json"_s);
-
     const QUrl reqUrl{url()};
     QNetworkRequest req{reqUrl};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     req.setHeader(QNetworkRequest::ContentTypeHeader, u"application/x-www-form-urlencoded"_s);
 
-    const QByteArray query = queryUrl.toString(QUrl::FullyEncoded).toUtf8();
+    queryParams.emplace(u"api_sig"_s, signature);
+    queryParams.emplace(u"format"_s, u"json"_s);
+    const QByteArray query = createRequestBody(queryParams);
 
     QNetworkReply* reply = addReply(network()->post(req, query));
     qCDebug(SCROBBLER) << "POST queued to network manager for" << name() << "method" << requestMethod(params) << "items"
-                       << requestItemCount(params) << "params" << queryParams.size() + 2 << "url" << reqUrl.toString()
+                       << requestItemCount(params) << "params" << queryParams.size() << "url" << reqUrl.toString()
                        << "bodyBytes" << query.size();
 
     return reply;
+}
+
+QByteArray LastFmService::createRequestBody(const std::map<QString, QString>& params)
+{
+    QByteArray body;
+
+    for(const auto& [key, value] : params) {
+        if(!body.isEmpty()) {
+            body += '&';
+        }
+        body += encodeQueryKey(key);
+        body += '=';
+        body += encodeQueryValue(value);
+    }
+
+    return body;
+}
+
+LastFmService::ReplyErrorInfo LastFmService::getReplyErrorInfo(QNetworkReply* reply, const QJsonObject& obj)
+{
+    ReplyErrorInfo errorInfo;
+    errorInfo.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    if(obj.contains("error"_L1)) {
+        errorInfo.apiErrorCode = obj.value("error"_L1).toInt();
+    }
+    if(obj.contains("message"_L1)) {
+        errorInfo.message = obj.value("message"_L1).toString();
+    }
+
+    return errorInfo;
 }
 
 void LastFmService::updateNowPlayingFinished(QNetworkReply* reply)
@@ -478,6 +519,30 @@ void LastFmService::scrobbleFinished(QNetworkReply* reply, const CacheItemList& 
     QJsonObject obj;
     QString errorStr;
     if(getJsonFromReply(reply, &obj, &errorStr) != ReplyResult::Success) {
+        const ReplyErrorInfo errorInfo = getReplyErrorInfo(reply, obj);
+
+        if(errorInfo.apiErrorCode == static_cast<int>(ScrobbleError::InvalidMethodSignature)) {
+            if(items.size() == 1 && items.front()->hasError) {
+                qCWarning(SCROBBLER) << "Discarding cached Last.fm scrobble after repeated signature failure:"
+                                     << items.front()->metadata.artist << u"-"_s << items.front()->metadata.title
+                                     << "timestamp" << items.front()->timestamp;
+                cache()->flush(items);
+                setSubmitError(false);
+                doDelayedSubmit();
+                return;
+            }
+
+            qCWarning(SCROBBLER) << "Retrying Last.fm scrobbles individually after signature failure for batch of"
+                                 << items.size();
+            std::ranges::for_each(items, [](const auto& item) {
+                item->submitted = false;
+                item->hasError  = true;
+            });
+            setSubmitError(true);
+            doDelayedSubmit();
+            return;
+        }
+
         setSubmitError(true);
         qCWarning(SCROBBLER) << "Unable to scrobble for" << name() << "count" << items.size() << ":" << errorStr;
         std::ranges::for_each(items, [](const auto& item) { item->submitted = false; });
