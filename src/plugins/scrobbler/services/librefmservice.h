@@ -29,5 +29,9 @@ public:
 
     [[nodiscard]] QUrl url() const override;
     [[nodiscard]] QUrl authUrl() const override;
+
+protected:
+    [[nodiscard]] QString apiKey() const override;
+    [[nodiscard]] QString apiSecret() const override;
 };
 } // namespace Fooyin::Scrobbler

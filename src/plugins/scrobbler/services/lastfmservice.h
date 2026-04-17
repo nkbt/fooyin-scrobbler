@@ -44,6 +44,9 @@ public:
     void submit() override;
 
 protected:
+    [[nodiscard]] virtual QString apiKey() const;
+    [[nodiscard]] virtual QString apiSecret() const;
+
     void setupAuthQuery(ScrobblerAuthSession* session, QUrlQuery& query) override;
     void requestAuth(const QString& token) override;
     void authFinished(QNetworkReply* reply) override;
@@ -64,8 +67,6 @@ private:
     void updateNowPlayingFinished(QNetworkReply* reply);
     void scrobbleFinished(QNetworkReply* reply, const CacheItemList& items);
 
-    QString m_apiKey;
-    QString m_secret;
     QString m_username;
     QString m_sessionKey;
 };

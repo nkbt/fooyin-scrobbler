@@ -24,6 +24,9 @@ using namespace Qt::StringLiterals;
 constexpr auto ApiUrl  = "https://libre.fm/2.0/";
 constexpr auto AuthUrl = "https://libre.fm/api/auth/";
 
+constexpr auto ApiKey    = "MjVkNGJiMDY4MWY3NjE3MzYyMTkxZTM4NGExZjlmOWE=";
+constexpr auto ApiSecret = "Mjg4ZGJlNmUxMGY2NmM5ZDcyZDUyZGE0MmRmZTY0YTQ=";
+
 namespace Fooyin::Scrobbler {
 QUrl LibreFmService::url() const
 {
@@ -33,5 +36,15 @@ QUrl LibreFmService::url() const
 QUrl LibreFmService::authUrl() const
 {
     return QString::fromLatin1(AuthUrl);
+}
+
+QString LibreFmService::apiKey() const
+{
+    return QString::fromLatin1(QByteArray::fromBase64(ApiKey));
+}
+
+QString LibreFmService::apiSecret() const
+{
+    return QString::fromLatin1(QByteArray::fromBase64(ApiSecret));
 }
 } // namespace Fooyin::Scrobbler

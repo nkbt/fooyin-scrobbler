@@ -130,9 +130,17 @@ namespace Fooyin::Scrobbler {
 LastFmService::LastFmService(ServiceDetails service, NetworkAccessManager* network, SettingsManager* settings,
                              QObject* parent)
     : ScrobblerService{std::move(service), network, settings, parent}
-    , m_apiKey{QString::fromLatin1(QByteArray::fromBase64(ApiKey))}
-    , m_secret{QString::fromLatin1(QByteArray::fromBase64(ApiSecret))}
 { }
+
+QString LastFmService::apiKey() const
+{
+    return QString::fromLatin1(QByteArray::fromBase64(ApiKey));
+}
+
+QString LastFmService::apiSecret() const
+{
+    return QString::fromLatin1(QByteArray::fromBase64(ApiSecret));
+}
 
 QUrl LastFmService::url() const
 {
@@ -295,7 +303,7 @@ void LastFmService::submit()
 
 void LastFmService::setupAuthQuery(ScrobblerAuthSession* session, QUrlQuery& query)
 {
-    query.addQueryItem(u"api_key"_s, m_apiKey);
+    query.addQueryItem(u"api_key"_s, apiKey());
     query.addQueryItem(u"cb"_s, session->callbackUrl());
 }
 
@@ -304,7 +312,7 @@ void LastFmService::requestAuth(const QString& token)
     QUrl reqUrl{url()};
 
     QUrlQuery urlQuery;
-    urlQuery.addQueryItem(u"api_key"_s, m_apiKey);
+    urlQuery.addQueryItem(u"api_key"_s, apiKey());
     urlQuery.addQueryItem(u"method"_s, u"auth.getSession"_s);
     urlQuery.addQueryItem(u"token"_s, token);
 
@@ -313,7 +321,7 @@ void LastFmService::requestAuth(const QString& token)
     for(const auto& [key, value] : items) {
         data += key + value;
     }
-    data += m_secret;
+    data += apiSecret();
 
     const QByteArray digest = QCryptographicHash::hash(data.toUtf8(), QCryptographicHash::Md5);
     const QString signature = QString::fromLatin1(digest.toHex()).rightJustified(32, u'0').toLower();
@@ -429,7 +437,7 @@ ScrobblerService::ReplyResult LastFmService::getJsonFromReply(QNetworkReply* rep
 QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& params)
 {
     std::map<QString, QString> queryParams{
-        {u"api_key"_s, m_apiKey}, {u"sk"_s, m_sessionKey}, {u"lang"_s, QLocale{}.name().left(2).toLower()}};
+        {u"api_key"_s, apiKey()}, {u"sk"_s, m_sessionKey}, {u"lang"_s, QLocale{}.name().left(2).toLower()}};
     queryParams.insert(params.cbegin(), params.cend());
 
     QString data;
@@ -437,7 +445,7 @@ QNetworkReply* LastFmService::createRequest(const std::map<QString, QString>& pa
     for(const auto& [key, value] : std::as_const(queryParams)) {
         data += key + value;
     }
-    data += m_secret;
+    data += apiSecret();
 
     const QByteArray digest = QCryptographicHash::hash(data.toUtf8(), QCryptographicHash::Md5);
     const QString signature = QString::fromLatin1(digest.toHex()).rightJustified(32, u'0').toLower();
