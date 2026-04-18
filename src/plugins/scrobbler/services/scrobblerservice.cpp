@@ -120,10 +120,26 @@ ServiceDetails ScrobblerService::details() const
 
 void ScrobblerService::updateDetails(const ServiceDetails& details)
 {
+    const bool wasActive = isEnabled() && isAuthenticated();
+
     if(isCustom() && details.name != m_details.name) {
         deleteSession();
     }
     m_details = details;
+
+    const bool isActive = isEnabled() && isAuthenticated();
+    if(!isActive) {
+        if(m_submitTimer.isActive()) {
+            m_submitTimer.stop();
+        }
+        if(!m_replies.empty() || m_authSession || m_submitted) {
+            deleteAll();
+            setSubmitted(false);
+        }
+    }
+    else if(!wasActive) {
+        doDelayedSubmit();
+    }
 }
 
 void ScrobblerService::initialise()
@@ -436,6 +452,16 @@ void ScrobblerService::doDelayedSubmit(bool initial)
         return;
     }
 
+    if(!isEnabled()) {
+        return;
+    }
+
+    if(!isAuthenticated()) {
+        qCDebug(SCROBBLER) << "Pending scrobbles will not submit until authentication succeeds for" << name() << "count"
+                           << pendingCount;
+        return;
+    }
+
     const int scrobbleDelay = m_settings->value<Settings::Scrobbler::ScrobblingDelay>();
 
     if(initial && !m_submitError && scrobbleDelay <= 0) {
@@ -472,6 +498,11 @@ void ScrobblerService::timerEvent(QTimerEvent* event)
 {
     if(event->timerId() == m_submitTimer.timerId()) {
         m_submitTimer.stop();
+
+        if(!isEnabled() || !isAuthenticated()) {
+            return;
+        }
+
         submit();
     }
     QObject::timerEvent(event);

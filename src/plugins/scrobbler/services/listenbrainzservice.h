@@ -34,10 +34,12 @@ public:
 
     [[nodiscard]] QUrl url() const override;
     [[nodiscard]] bool requiresAuthentication() const override;
+    [[nodiscard]] bool isAuthenticated() const override;
 
     void saveSession() override;
     void loadSession() override;
     void deleteSession() override;
+    void logout() override;
 
     void testApi() override;
     void updateNowPlaying() override;

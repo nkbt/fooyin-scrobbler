@@ -142,6 +142,11 @@ bool ListenBrainzService::requiresAuthentication() const
     return false;
 }
 
+bool ListenBrainzService::isAuthenticated() const
+{
+    return !userToken().trimmed().isEmpty();
+}
+
 void ListenBrainzService::saveSession()
 {
     FySettings settings;
@@ -184,6 +189,12 @@ void ListenBrainzService::deleteSession()
     settings.remove("UserToken");
 
     settings.endGroup();
+}
+
+void ListenBrainzService::logout()
+{
+    detailsRef().token.clear();
+    saveSession();
 }
 
 void ListenBrainzService::testApi()
