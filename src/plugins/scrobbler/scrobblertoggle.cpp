@@ -19,6 +19,7 @@
 
 #include "scrobblertoggle.h"
 
+#include "scrobblerconstants.h"
 #include "settings/scrobblersettings.h"
 
 #include <gui/guisettings.h>
@@ -26,12 +27,16 @@
 #include <gui/widgets/toolbutton.h>
 #include <utils/actions/actionmanager.h>
 #include <utils/actions/command.h>
+#include <utils/settings/settingsdialogcontroller.h>
 #include <utils/settings/settingsmanager.h>
 #include <utils/utils.h>
 
+#include <QAction>
+#include <QContextMenuEvent>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QMenu>
 
 using namespace Qt::StringLiterals;
 
@@ -81,6 +86,39 @@ void ScrobblerToggle::changeEvent(QEvent* event)
         default:
             break;
     }
+}
+
+void ScrobblerToggle::contextMenuEvent(QContextMenuEvent* event)
+{
+    auto* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+
+    auto* scrobblingEnabled = new QAction(tr("Enable scrobbling"), menu);
+    scrobblingEnabled->setCheckable(true);
+    scrobblingEnabled->setChecked(m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
+    QObject::connect(scrobblingEnabled, &QAction::triggered, this,
+                     [this](bool enabled) { m_settings->set<Settings::Scrobbler::ScrobblingEnabled>(enabled); });
+    menu->addAction(scrobblingEnabled);
+
+    menu->addSeparator();
+
+    auto* scrobblingSettings = new QAction(tr("Scrobbling settings…"), menu);
+    QObject::connect(scrobblingSettings, &QAction::triggered, this, [this]() {
+        if(m_settings && m_settings->settingsDialog()) {
+            m_settings->settingsDialog()->openAtPage(Constants::Page::General);
+        }
+    });
+    menu->addAction(scrobblingSettings);
+
+    auto* scrobblingServices = new QAction(tr("Scrobbling services…"), menu);
+    QObject::connect(scrobblingServices, &QAction::triggered, this, [this]() {
+        if(m_settings && m_settings->settingsDialog()) {
+            m_settings->settingsDialog()->openAtPage(Constants::Page::Services);
+        }
+    });
+    menu->addAction(scrobblingServices);
+
+    menu->popup(event->globalPos());
 }
 
 void ScrobblerToggle::updateButton()

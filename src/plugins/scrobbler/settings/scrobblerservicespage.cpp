@@ -21,6 +21,7 @@
 
 #include "customservicedialog.h"
 #include "scrobbler.h"
+#include "scrobblerconstants.h"
 #include "scrobblersettings.h"
 
 #include <gui/widgets/scriptlineedit.h>
@@ -365,7 +366,7 @@ ScrobblerServicesPageWidget::findContext(ScrobblerService* service)
 ScrobblerServicesPage::ScrobblerServicesPage(Scrobbler* scrobbler, SettingsManager* settings, QObject* parent)
     : SettingsPage{settings->settingsDialog(), parent}
 {
-    setId({"Fooyin.Page.Network.Scrobbling.Services"});
+    setId(Constants::Page::Services);
     setName(tr("Services"));
     setCategory({tr("Networking"), tr("Scrobbling")});
     setWidgetCreator([scrobbler, settings] { return new ScrobblerServicesPageWidget(scrobbler, settings); });

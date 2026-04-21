@@ -19,8 +19,9 @@
 
 #include "scrobblerpage.h"
 
-#include "../customservicedialog.h"
-#include "../scrobbler.h"
+#include "customservicedialog.h"
+#include "scrobbler.h"
+#include "scrobblerconstants.h"
 #include "scrobblersettings.h"
 
 #include <gui/widgets/scriptlineedit.h>
@@ -178,7 +179,7 @@ void ScrobblerPageWidget::reset()
 ScrobblerPage::ScrobblerPage(SettingsManager* settings, QObject* parent)
     : SettingsPage{settings->settingsDialog(), parent}
 {
-    setId({"Fooyin.Page.Network.Scrobbling.General"});
+    setId(Constants::Page::General);
     setName(tr("General"));
     setCategory({tr("Networking"), tr("Scrobbling")});
     setWidgetCreator([settings] { return new ScrobblerPageWidget(settings); });
