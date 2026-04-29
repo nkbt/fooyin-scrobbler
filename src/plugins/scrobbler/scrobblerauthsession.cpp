@@ -66,13 +66,18 @@ ScrobblerAuthSession::ScrobblerAuthSession(QObject* parent)
         qCCritical(SCROBBLER_AUTH) << "Could not open port; callback won't work:" << m_server->errorString();
     }
 
-    m_callbackUrl = u"http://localhost:%1"_s.arg(m_server->serverPort());
+    m_callbackUrl = u"http://localhost:%1/"_s.arg(m_server->serverPort());
 
     QObject::connect(m_server, &QTcpServer::newConnection, this, [this] {
-        m_socket = m_server->nextPendingConnection();
-        m_server->close();
+        if(m_socket) {
+            m_socket->close();
+            m_socket->deleteLater();
+        }
+        requestData.clear();
 
-        QObject::connect(m_socket, &QTcpSocket::readyRead, m_socket, [this] {
+        m_socket = m_server->nextPendingConnection();
+
+        QObject::connect(m_socket, &QTcpSocket::readyRead, this, [this] {
             requestData.append(m_socket->readAll());
             if(!m_socket->atEnd() && !requestData.endsWith("\r\n\r\n")) {
                 qDebug(SCROBBLER_AUTH) << "Incomplete request; waiting for more data";
@@ -81,7 +86,6 @@ ScrobblerAuthSession::ScrobblerAuthSession(QObject* parent)
             processCallback();
         });
         QObject::connect(m_socket, &QTcpSocket::disconnected, m_socket, &QTcpSocket::deleteLater);
-        QObject::connect(m_socket, &QObject::destroyed, this, &QObject::deleteLater);
     });
 
     qCDebug(SCROBBLER_AUTH) << "Auth session constructed";
@@ -133,6 +137,10 @@ void ScrobblerAuthSession::processCallback()
 
 void ScrobblerAuthSession::sendHttpResponse(const QByteArray& code, const QByteArray& msg)
 {
+    if(!m_socket) {
+        return;
+    }
+
     m_socket->write("HTTP/1.0 ");
     m_socket->write(code);
     m_socket->write("\r\n"
@@ -140,6 +148,10 @@ void ScrobblerAuthSession::sendHttpResponse(const QByteArray& code, const QByteA
                     "\r\n\r\n");
     m_socket->write(msg);
     m_socket->write("\r\n");
+
+    m_socket->flush();
+    m_socket->close();
+    m_server->close();
 }
 
 void ScrobblerAuthSession::onError(const QByteArray& code, const QString& errorMsg)
