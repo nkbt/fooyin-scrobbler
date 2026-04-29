@@ -385,7 +385,7 @@ void ListenBrainzService::testFinished(QNetworkReply* reply)
         handleTestError("Token could not be authenticated");
     }
     else {
-        emit testApiFinished(true);
+        Q_EMIT testApiFinished(true);
     }
 }
 

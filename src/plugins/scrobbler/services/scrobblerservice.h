@@ -91,7 +91,7 @@ public:
     [[nodiscard]] virtual QString tokenSetting() const;
     [[nodiscard]] virtual QUrl tokenUrl() const;
 
-signals:
+Q_SIGNALS:
     void testApiFinished(bool success, const QString& error = {});
     void authenticationFinished(bool success, const QString& error = {});
 

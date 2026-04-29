@@ -193,7 +193,7 @@ void ScrobblerService::authenticate()
         switch(result) {
             case(QMessageBox::Cancel):
                 cleanupAuth();
-                emit authenticationFinished(false);
+                Q_EMIT authenticationFinished(false);
             default:
                 break;
         }
@@ -406,13 +406,13 @@ bool ScrobblerService::extractJsonObj(const QByteArray& data, QJsonObject* obj, 
 void ScrobblerService::handleTestError(const char* error)
 {
     qCWarning(SCROBBLER) << error;
-    emit testApiFinished(false, QString::fromUtf8(error));
+    Q_EMIT testApiFinished(false, QString::fromUtf8(error));
 }
 
 void ScrobblerService::handleAuthError(const char* error)
 {
     qCWarning(SCROBBLER) << error;
-    emit authenticationFinished(false, QString::fromUtf8(error));
+    Q_EMIT authenticationFinished(false, QString::fromUtf8(error));
     cleanupAuth();
 }
 

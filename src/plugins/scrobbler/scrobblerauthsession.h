@@ -37,7 +37,7 @@ public:
 
     void setAuthTokenName(const QString& name);
 
-signals:
+Q_SIGNALS:
     void tokenReceived(const QString& token);
 
 private:

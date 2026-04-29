@@ -377,7 +377,7 @@ void LastFmService::authFinished(QNetworkReply* reply)
     saveSession();
     resumePendingSubmissions();
 
-    emit authenticationFinished(true);
+    Q_EMIT authenticationFinished(true);
     cleanupAuth();
 }
 

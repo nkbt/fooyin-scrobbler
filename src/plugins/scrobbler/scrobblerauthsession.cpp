@@ -128,7 +128,7 @@ void ScrobblerAuthSession::processCallback()
 
     sendHttpResponse("200 OK", msg.toUtf8());
 
-    emit tokenReceived(query.queryItemValue(m_tokenName));
+    Q_EMIT tokenReceived(query.queryItemValue(m_tokenName));
 }
 
 void ScrobblerAuthSession::sendHttpResponse(const QByteArray& code, const QByteArray& msg)
