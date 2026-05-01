@@ -43,6 +43,7 @@ protected:
 
 private:
     void updateButton();
+    void updateButtonIcon();
     void updateButtonStyle() const;
     void scrobblingToggled(bool enabled);
 

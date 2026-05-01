@@ -124,7 +124,24 @@ void ScrobblerToggle::contextMenuEvent(QContextMenuEvent* event)
 void ScrobblerToggle::updateButton()
 {
     updateButtonStyle();
-    scrobblingToggled(m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
+    updateButtonIcon();
+}
+
+void ScrobblerToggle::updateButtonIcon()
+{
+    QAction* action = m_scrobbleButton->defaultAction();
+    if(!action) {
+        return;
+    }
+
+    const bool enabled = m_settings->value<Settings::Scrobbler::ScrobblingEnabled>();
+    if(enabled) {
+        const QColor iconColour = palette().highlight().color();
+        action->setIcon(Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), iconColour));
+    }
+    else {
+        action->setIcon(Gui::iconFromTheme(ScrobbleIcon));
+    }
 }
 
 void ScrobblerToggle::updateButtonStyle() const
@@ -136,16 +153,9 @@ void ScrobblerToggle::updateButtonStyle() const
     m_scrobbleButton->setAutoRaise(!(options & Settings::Gui::Raise));
 }
 
-void ScrobblerToggle::scrobblingToggled(bool enabled)
+void ScrobblerToggle::scrobblingToggled(bool /*enabled*/)
 {
-    if(enabled) {
-        const QColor iconColour = palette().highlight().color();
-        m_scrobbleButton->setIcon(
-            Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), iconColour));
-    }
-    else {
-        m_scrobbleButton->setIcon(Gui::iconFromTheme(ScrobbleIcon));
-    }
+    updateButtonIcon();
 }
 } // namespace Fooyin::Scrobbler
 
