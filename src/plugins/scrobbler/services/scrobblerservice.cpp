@@ -276,6 +276,10 @@ void ScrobblerService::scrobble(const Track& track)
         return;
     }
 
+    if(m_scrobbled) {
+        return;
+    }
+
     if(track.id() != m_currentTrack.id() || track.uniqueFilepath() != m_currentTrack.uniqueFilepath()) {
         return;
     }

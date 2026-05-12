@@ -50,7 +50,6 @@ public:
     [[nodiscard]] std::vector<ScrobblerService*> services() const;
     [[nodiscard]] ScrobblerService* service(const QString& name) const;
 
-    void updateNowPlaying(const Track& track);
     void scrobble(const Track& track);
 
     std::unique_ptr<ScrobblerService> createCustomService(const ServiceDetails& details);
@@ -59,10 +58,16 @@ public:
 
     void saveCache();
 
-private:
+protected:
     void timerEvent(QTimerEvent* event) override;
 
+private:
+    void currentTrackChanged(const Track& track);
+    [[nodiscard]] bool currentTrackReachedScrobbleThreshold() const;
+    void updateScrobbleThreshold();
+
     [[nodiscard]] int nextNowPlayingRefreshDelay() const;
+    void updateNowPlaying(const Track& track);
     void updateNowPlayingTimer(bool reset = false);
 
     void addDefaultServices();
@@ -75,6 +80,7 @@ private:
 
     std::vector<std::unique_ptr<ScrobblerService>> m_services;
     QBasicTimer m_nowPlayingTimer;
+    bool m_scrobbledCurrentTrack;
 };
 } // namespace Scrobbler
 } // namespace Fooyin
