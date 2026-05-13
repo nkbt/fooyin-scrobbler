@@ -363,7 +363,7 @@ ScrobblerServicesPage::ScrobblerServicesPage(Scrobbler* scrobbler, SettingsManag
 {
     setId(Constants::Page::Services);
     setName(tr("Services"));
-    setCategory({tr("Integrations"), tr("Scrobbling")});
+    setCategory({tr("Integrations"), tr("Scrobbling"), tr("Services")});
     setWidgetCreator([scrobbler, settings] { return new ScrobblerServicesPageWidget(scrobbler, settings); });
 }
 } // namespace Fooyin::Scrobbler
