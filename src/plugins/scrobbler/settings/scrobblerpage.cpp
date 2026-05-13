@@ -181,7 +181,7 @@ ScrobblerPage::ScrobblerPage(SettingsManager* settings, QObject* parent)
 {
     setId(Constants::Page::General);
     setName(tr("General"));
-    setCategory({tr("Networking"), tr("Scrobbling")});
+    setCategory({tr("Integrations"), tr("Scrobbling")});
     setWidgetCreator([settings] { return new ScrobblerPageWidget(settings); });
 }
 } // namespace Fooyin::Scrobbler

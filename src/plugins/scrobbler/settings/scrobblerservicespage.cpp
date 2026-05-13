@@ -24,19 +24,14 @@
 #include "scrobblerconstants.h"
 #include "scrobblersettings.h"
 
-#include <gui/widgets/scriptlineedit.h>
 #include <utils/settings/settingsmanager.h>
 
-#include <QCheckBox>
 #include <QGridLayout>
 #include <QGroupBox>
-#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSpinBox>
-#include <QStyle>
 
 using namespace Qt::StringLiterals;
 
@@ -368,7 +363,7 @@ ScrobblerServicesPage::ScrobblerServicesPage(Scrobbler* scrobbler, SettingsManag
 {
     setId(Constants::Page::Services);
     setName(tr("Services"));
-    setCategory({tr("Networking"), tr("Scrobbling")});
+    setCategory({tr("Integrations"), tr("Scrobbling")});
     setWidgetCreator([scrobbler, settings] { return new ScrobblerServicesPageWidget(scrobbler, settings); });
 }
 } // namespace Fooyin::Scrobbler

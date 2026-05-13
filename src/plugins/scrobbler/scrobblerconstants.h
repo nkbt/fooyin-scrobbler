@@ -21,7 +21,7 @@
 
 namespace Fooyin::Scrobbler::Constants {
 namespace Page {
-const auto General  = "Fooyin.Page.Network.Scrobbling.General";
-const auto Services = "Fooyin.Page.Network.Scrobbling.Services";
+constexpr auto General  = "Fooyin.Page.Integrations.Scrobbling.General";
+constexpr auto Services = "Fooyin.Page.Integrations.Scrobbling.Services";
 } // namespace Page
 } // namespace Fooyin::Scrobbler::Constants
