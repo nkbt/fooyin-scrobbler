@@ -136,7 +136,7 @@ void ScrobblerToggle::updateButtonIcon()
 
     const bool enabled = m_settings->value<Settings::Scrobbler::ScrobblingEnabled>();
     if(enabled) {
-        const QColor iconColour = palette().highlight().color();
+        const QColor iconColour = palette().color(QPalette::Active, QPalette::Highlight);
         action->setIcon(Utils::changePixmapColour(Gui::iconFromTheme(ScrobbleIcon).pixmap({128, 128}), iconColour));
     }
     else {
