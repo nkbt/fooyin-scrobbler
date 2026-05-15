@@ -25,6 +25,7 @@
 #include "settings/scrobblerservicespage.h"
 #include "settings/scrobblersettings.h"
 
+#include <gui/iconloader.h>
 #include <gui/widgetprovider.h>
 #include <utils/actions/actionmanager.h>
 #include <utils/actions/command.h>
@@ -33,6 +34,8 @@
 #include <QAction>
 
 using namespace Qt::StringLiterals;
+
+constexpr auto ScrobbleIcon = "scrobble";
 
 namespace Fooyin::Scrobbler {
 void ScrobblerPlugin::initialise(const CorePluginContext& context)
@@ -50,10 +53,12 @@ void ScrobblerPlugin::initialise(const GuiPluginContext& context)
     m_actionManager = context.actionManager;
 
     auto* toggleScrobble = new QAction(tr("Toggle scrobbling"), this);
-    QObject::connect(toggleScrobble, &QAction::triggered, this, [this]() {
-        m_settings->set<Settings::Scrobbler::ScrobblingEnabled>(
-            !m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
-    });
+    Gui::setThemeIcon(toggleScrobble, ScrobbleIcon);
+    toggleScrobble->setCheckable(true);
+    toggleScrobble->setChecked(m_settings->value<Settings::Scrobbler::ScrobblingEnabled>());
+    QObject::connect(toggleScrobble, &QAction::triggered, this,
+                     [this](bool enabled) { m_settings->set<Settings::Scrobbler::ScrobblingEnabled>(enabled); });
+    m_settings->subscribe<Settings::Scrobbler::ScrobblingEnabled>(toggleScrobble, &QAction::setChecked);
     auto* toggleCmd = m_actionManager->registerAction(toggleScrobble, "Scrobbler.Toggle");
     toggleCmd->setCategories({tr("Scrobbler")});
 
