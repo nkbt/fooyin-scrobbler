@@ -1,0 +1,401 @@
+/*
+ * Fooyin
+ * Copyright © 2024, Luke Taylor <luket@pm.me>
+ *
+ * Fooyin is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Fooyin is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Fooyin.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "scrobblerservicespage.h"
+
+#include "customservicedialog.h"
+#include "scrobbler.h"
+#include "scrobblerconstants.h"
+#include "scrobblersettings.h"
+
+#include <gui/widgets/hintlabel.h>
+
+#include <utils/settings/settingsmanager.h>
+
+#include <QCheckBox>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QPushButton>
+
+using namespace Qt::StringLiterals;
+
+namespace Fooyin::Scrobbler {
+class ScrobblerServicesPageWidget : public SettingsPageWidget
+{
+    Q_OBJECT
+
+public:
+    explicit ScrobblerServicesPageWidget(Scrobbler* scrobbler, SettingsManager* settings);
+
+    void load() override;
+    void apply() override;
+    void reset() override;
+
+private:
+    void populateServices();
+    void toggleLogin(ScrobblerService* service);
+    void updateServiceState(ScrobblerService* service);
+    void updateDetails(ScrobblerService* service);
+
+    void addService(ScrobblerService* service);
+    void addCustomService();
+    void editCustomService(ScrobblerService* service);
+    void deleteCustomService(ScrobblerService* service);
+
+    Scrobbler* m_scrobbler;
+    SettingsManager* m_settings;
+
+    QGroupBox* m_serviceGroup;
+    QGridLayout* m_serviceLayout;
+
+    struct ServiceContext
+    {
+        ScrobblerService* service{nullptr};
+
+        // Auth-related
+        QPushButton* loginBtn{nullptr};
+        QLabel* statusLabel{nullptr};
+        QString error;
+        // Common
+        QGroupBox* groupCheck{nullptr};
+        QCheckBox* submitLoved{nullptr};
+        QCheckBox* syncPlaybackStats{nullptr};
+        // ListenBrainz
+        QLineEdit* tokenInput{nullptr};
+        // Custom
+        QLineEdit* url{nullptr};
+        QLineEdit* token{nullptr};
+    };
+
+    std::vector<ServiceContext>::iterator findContext(ScrobblerService* service);
+
+    std::vector<ServiceContext> m_serviceContext;
+    std::vector<ServiceContext> m_pendingDelete;
+
+    QPushButton* m_addCustomService;
+};
+
+ScrobblerServicesPageWidget::ScrobblerServicesPageWidget(Scrobbler* scrobbler, SettingsManager* settings)
+    : m_scrobbler{scrobbler}
+    , m_settings{settings}
+    , m_serviceGroup{new QGroupBox(tr("Services"), this)}
+    , m_serviceLayout{new QGridLayout(m_serviceGroup)}
+    , m_addCustomService{new QPushButton(tr("Add Service"), this)}
+{
+    m_serviceLayout->setRowStretch(m_serviceLayout->rowCount(), 1);
+    m_serviceLayout->setColumnStretch(0, 1);
+
+    auto* layout = new QGridLayout(this);
+
+    int row{0};
+    layout->addWidget(m_serviceGroup, row++, 0, 1, 3);
+    layout->addWidget(m_addCustomService, row++, 0, 1, 3);
+    layout->setRowStretch(layout->rowCount(), 1);
+    layout->setColumnStretch(2, 1);
+
+    QObject::connect(m_addCustomService, &QPushButton::clicked, this, &ScrobblerServicesPageWidget::addCustomService);
+}
+
+void ScrobblerServicesPageWidget::load()
+{
+    populateServices();
+}
+
+void ScrobblerServicesPageWidget::apply()
+{
+    for(const auto& context : m_pendingDelete) {
+        m_scrobbler->removeCustomService(context.service);
+    }
+
+    m_pendingDelete.clear();
+
+    for(const auto& context : m_serviceContext) {
+        updateDetails(context.service);
+        context.service->saveSession();
+    }
+}
+
+void ScrobblerServicesPageWidget::reset() { }
+
+void ScrobblerServicesPageWidget::populateServices()
+{
+    m_pendingDelete.clear();
+
+    const auto services = m_scrobbler->services();
+    for(ScrobblerService* service : services) {
+        addService(service);
+    }
+}
+
+void ScrobblerServicesPageWidget::toggleLogin(ScrobblerService* service)
+{
+    const auto context = findContext(service);
+    if(context == m_serviceContext.cend()) {
+        return;
+    }
+
+    if(service->isAuthenticated()) {
+        service->logout();
+        updateServiceState(service);
+        return;
+    }
+
+    const auto authFinished = [this, service, context](const bool success, const QString& error) {
+        context->error = success ? QString{} : error;
+        updateDetails(service);
+        updateServiceState(service);
+    };
+
+    QObject::connect(service, &ScrobblerService::authenticationFinished, this, authFinished);
+    service->authenticate();
+}
+
+void ScrobblerServicesPageWidget::updateServiceState(ScrobblerService* service)
+{
+    const auto context = findContext(service);
+    if(context == m_serviceContext.cend()) {
+        return;
+    }
+
+    if(context->loginBtn && service->requiresAuthentication()) {
+        if(service->isAuthenticated()) {
+            context->loginBtn->setText(tr("Sign Out"));
+
+            if(context->statusLabel) {
+                const QString username = service->username();
+                context->statusLabel->setText(username.isEmpty() ? tr("Signed in")
+                                                                 : tr("Signed in as %1").arg(username));
+            }
+        }
+        else {
+            context->loginBtn->setText(tr("Sign In"));
+
+            if(context->statusLabel) {
+                context->statusLabel->setText(tr("Not signed in"));
+            }
+            if(context->tokenInput) {
+                context->tokenInput->setReadOnly(false);
+            }
+        }
+    }
+
+    const auto details = service->details();
+
+    if(context->groupCheck) {
+        context->groupCheck->setChecked(details.isEnabled);
+    }
+
+    if(context->groupCheck) {
+        context->groupCheck->setTitle(details.name);
+    }
+    if(context->submitLoved) {
+        context->submitLoved->setChecked(details.submitLoved);
+    }
+    if(context->syncPlaybackStats) {
+        context->syncPlaybackStats->setChecked(details.syncPlaybackStats);
+    }
+
+    if(context->statusLabel && !context->error.isEmpty()) {
+        context->statusLabel->setText(context->error);
+    }
+
+    if(context->url) {
+        context->url->setText(details.url.toDisplayString());
+    }
+
+    if(context->token) {
+        context->token->setText(details.token);
+    }
+
+    if(context->tokenInput) {
+        context->tokenInput->setText(details.token);
+    }
+}
+
+void ScrobblerServicesPageWidget::updateDetails(ScrobblerService* service)
+{
+    const auto context = findContext(service);
+    if(context == m_serviceContext.cend()) {
+        return;
+    }
+
+    ServiceDetails details{service->details()};
+
+    if(context->groupCheck) {
+        details.isEnabled = context->groupCheck->isChecked();
+    }
+    if(context->tokenInput) {
+        details.token = context->tokenInput->text();
+    }
+    if(context->submitLoved) {
+        details.submitLoved = context->submitLoved->isChecked();
+    }
+    if(context->syncPlaybackStats) {
+        details.syncPlaybackStats = context->syncPlaybackStats->isChecked();
+    }
+
+    service->updateDetails(details);
+}
+
+void ScrobblerServicesPageWidget::addService(ScrobblerService* service)
+{
+    ServiceContext context;
+    context.service    = service;
+    context.groupCheck = new QGroupBox(service->name());
+    context.groupCheck->setCheckable(true);
+
+    auto* layout = new QGridLayout(context.groupCheck);
+    layout->setColumnStretch(1, 1);
+
+    const bool isCustom = service->details().isCustom();
+
+    if(isCustom) {
+        auto* editBtn = new QPushButton(tr("Edit"), this);
+        QObject::connect(editBtn, &QPushButton::clicked, this, [this, service]() { editCustomService(service); });
+        auto* deleteBtn = new QPushButton(tr("Delete"), this);
+        QObject::connect(deleteBtn, &QPushButton::clicked, this, [this, service]() { deleteCustomService(service); });
+
+        layout->addWidget(editBtn, 0, 2, Qt::AlignRight);
+        layout->addWidget(deleteBtn, 1, 2, Qt::AlignRight);
+    }
+
+    if(service->requiresAuthentication()) {
+        context.statusLabel = new QLabel(this);
+        layout->addWidget(context.statusLabel, 0, 0, 1, 2);
+
+        context.loginBtn = new QPushButton(this);
+        QObject::connect(context.loginBtn, &QPushButton::clicked, this, [this, service]() { toggleLogin(service); });
+
+        layout->addWidget(context.loginBtn, 0, 3, Qt::AlignRight);
+    }
+    else {
+        auto* tokenLabel = new QLabel(tr("Token") + ":"_L1, this);
+
+        if(isCustom) {
+            auto* urlLabel = new QLabel(tr("URL") + ":"_L1, this);
+            context.url    = new QLineEdit(this);
+            context.token  = new QLineEdit(this);
+
+            context.url->setReadOnly(true);
+            context.token->setReadOnly(true);
+
+            layout->addWidget(urlLabel, 0, 0);
+            layout->addWidget(context.url, 0, 1);
+            layout->addWidget(tokenLabel, 1, 0);
+            layout->addWidget(context.token, 1, 1);
+        }
+        else {
+            context.tokenInput = new QLineEdit(this);
+
+            layout->addWidget(tokenLabel, 0, 0);
+            layout->addWidget(context.tokenInput, 0, 1);
+        }
+
+        const QUrl tokenUrl = service->tokenUrl();
+        if(!isCustom && tokenUrl.isValid()) {
+            auto* tokenHintLabel = new HintLabel(tr("You can find your token here") + ": "_L1
+                                                     + u"<a href=\"%1\">%1</a>"_s.arg(tokenUrl.toString()),
+                                                 this);
+            tokenHintLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+            tokenHintLabel->setOpenExternalLinks(true);
+            tokenHintLabel->setTextFormat(Qt::RichText);
+            layout->addWidget(tokenHintLabel, 2, 0, 1, 2);
+        }
+    }
+
+    if(service->supportsLoved()) {
+        context.submitLoved = new QCheckBox(tr("Submit loved changes"), this);
+        context.submitLoved->setToolTip(tr("Submit Love and Unlove changes to this service"));
+        layout->addWidget(context.submitLoved, 3, 0, 1, 2);
+    }
+    if(service->supportsTrackStatsSync()) {
+        context.syncPlaybackStats = new QCheckBox(tr("Synchronise playback statistics"), this);
+        context.syncPlaybackStats->setToolTip(
+            tr("Import play counts and Loved status from this service when a track starts playing"));
+        layout->addWidget(context.syncPlaybackStats, 4, 0, 1, 2);
+    }
+
+    m_serviceLayout->addWidget(context.groupCheck, m_serviceLayout->rowCount(), 0);
+
+    m_serviceContext.emplace_back(context);
+    updateServiceState(service);
+}
+
+void ScrobblerServicesPageWidget::addCustomService()
+{
+    auto* dialog = new CustomServiceDialog(m_scrobbler, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+    QObject::connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+        const auto details = dialog->serviceDetails();
+        if(auto* service = m_scrobbler->addCustomService(details)) {
+            addService(service);
+        }
+    });
+
+    dialog->show();
+}
+
+void ScrobblerServicesPageWidget::editCustomService(ScrobblerService* service)
+{
+    auto* dialog = new CustomServiceDialog(service, m_scrobbler, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+    QObject::connect(dialog, &QDialog::accepted, this, [this, service, dialog]() {
+        const auto details = dialog->serviceDetails();
+        service->updateDetails(details);
+        service->saveSession();
+        updateServiceState(service);
+    });
+
+    dialog->show();
+}
+
+void ScrobblerServicesPageWidget::deleteCustomService(ScrobblerService* service)
+{
+    const auto context = findContext(service);
+    if(context != m_serviceContext.cend()) {
+        m_pendingDelete.emplace_back(*context);
+        context->groupCheck->hide();
+        m_serviceContext.erase(context);
+    }
+}
+
+std::vector<ScrobblerServicesPageWidget::ServiceContext>::iterator
+ScrobblerServicesPageWidget::findContext(ScrobblerService* service)
+{
+    return std::ranges::find_if(m_serviceContext,
+                                [service](const auto& context) { return context.service == service; });
+}
+
+ScrobblerServicesPage::ScrobblerServicesPage(Scrobbler* scrobbler, SettingsManager* settings, QObject* parent)
+    : SettingsPage{settings->settingsDialog(), parent}
+{
+    setId(Constants::Page::Services);
+    setName(tr("Services"));
+    setCategory({tr("Integrations"), tr("Scrobbling"), tr("Services")});
+    setWidgetCreator([scrobbler, settings] { return new ScrobblerServicesPageWidget(scrobbler, settings); });
+}
+} // namespace Fooyin::Scrobbler
+
+#include "moc_scrobblerservicespage.cpp"
+#include "scrobblerservicespage.moc"
