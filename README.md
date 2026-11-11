@@ -6,8 +6,6 @@ The import retains 93 upstream commits by 8 authors, including the original auth
 
 The filtered history joins the empty `Init` commit through an unrelated-history merge. Standalone build integration and feature changes are separate from this baseline.
 
-![Import verification](docs/import-checks.png)
-
 ## Remote playback
 
 Now Playing and completed remote scrobbles run entirely in the plugin through fooyin’s public playback-progress API. The existing listened-time threshold, service queues, metadata requirements and per-playback deduplication are preserved. Local tracks retain the existing `trackPlayed` path.
