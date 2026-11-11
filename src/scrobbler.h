@@ -22,9 +22,10 @@
 #include "services/scrobblerservice.h"
 #include "services/servicedetails.h"
 
+#include <core/player/playerdefs.h>
+
 #include <QBasicTimer>
 #include <QTimerEvent>
-#include <core/player/playerdefs.h>
 
 #include <memory>
 #include <optional>
@@ -81,6 +82,7 @@ private:
     };
 
     void handlePlayStateChanged(Player::PlayState state, Player::PlayState previous);
+    void scrobbleRemotePlayback();
     void handleTrackStatsChanged(const TrackList& tracks, Track::Stats stats);
     void handleFetchedTrackStats(const RemoteTrackStats& stats);
 
@@ -110,6 +112,8 @@ private:
     std::unordered_map<QString, std::unordered_map<QString, RemoteLovedState>> m_remoteLovedStates;
     std::unordered_map<QString, RemoteLovedState> m_selectedRemoteLoved;
     QBasicTimer m_nowPlayingTimer;
+    bool m_playedThresholdReached;
+    bool m_pausedDuringPlayback;
 };
 } // namespace Scrobbler
 } // namespace Fooyin
