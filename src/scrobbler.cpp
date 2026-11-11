@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <utility>
 
 using namespace Qt::StringLiterals;
 
@@ -67,6 +68,7 @@ Scrobbler::Scrobbler(PlayerController* playerController, MusicLibrary* library,
     , m_network{std::move(network)}
     , m_settings{settings}
     , m_dbPool{std::move(dbPool)}
+    , m_playedThresholdReached{playerController->playedThresholdReached()}
 {
     addDefaultServices();
     restoreServices();
@@ -80,6 +82,7 @@ Scrobbler::Scrobbler(PlayerController* playerController, MusicLibrary* library,
 
     QObject::connect(m_playerController, &PlayerController::currentTrackChanged, this, &Scrobbler::updateNowPlaying);
     QObject::connect(m_playerController, &PlayerController::trackPlayed, this, &Scrobbler::scrobble);
+    QObject::connect(m_playerController, &PlayerController::positionChanged, this, &Scrobbler::scrobbleRemotePlayback);
     QObject::connect(m_playerController, &PlayerController::playStateChanged, this, &Scrobbler::handlePlayStateChanged);
     QObject::connect(m_library, &MusicLibrary::tracksStatsChanged, this, &Scrobbler::handleTrackStatsChanged);
 
@@ -205,13 +208,27 @@ void Scrobbler::timerEvent(QTimerEvent* event)
 void Scrobbler::handlePlayStateChanged(Player::PlayState state, Player::PlayState previous)
 {
     if(previous == Player::PlayState::Stopped && state == Player::PlayState::Playing) {
-        const Track track = m_playerController->currentTrack();
+        m_playedThresholdReached = m_playerController->playedThresholdReached();
+        const Track track        = m_playerController->currentTrack();
         for(auto& service : m_services) {
             service->restartScrobbleSession(track);
         }
     }
 
     updateNowPlayingTimer();
+}
+
+void Scrobbler::scrobbleRemotePlayback()
+{
+    const bool playedThresholdReached = m_playerController->playedThresholdReached();
+    if(std::exchange(m_playedThresholdReached, playedThresholdReached) || !playedThresholdReached) {
+        return;
+    }
+
+    const Track track = m_playerController->currentTrack();
+    if(track.isRemote() && m_playerController->playState() == Player::PlayState::Playing) {
+        scrobble(track);
+    }
 }
 
 void Scrobbler::handleTrackStatsChanged(const TrackList& tracks, const Track::Stats stats)
@@ -412,7 +429,8 @@ void Scrobbler::pruneTrackStatsSyncState(const int64_t now)
 
 void Scrobbler::updateNowPlaying(const Track& track)
 {
-    const auto now = static_cast<int64_t>(QDateTime::currentMSecsSinceEpoch());
+    m_playedThresholdReached = m_playerController->playedThresholdReached();
+    const auto now           = static_cast<int64_t>(QDateTime::currentMSecsSinceEpoch());
     pruneTrackStatsSyncState(now);
 
     for(auto& service : m_services) {
