@@ -370,6 +370,40 @@ TEST_F(RemotePlaybackTest, PauseAndReplayKeepOneListenPerPlayback)
     EXPECT_EQ(m_cache->count(), 2);
 }
 
+TEST_F(RemotePlaybackTest, ThresholdCrossedAfterPauseRequestIsSubmittedOnce)
+{
+    QSignalSpy corePlayed{m_controller.get(), &PlayerController::trackPlayed};
+    play(makeTrack(u"https://music.example.test/pause.flac"_s, 11, 120000));
+    m_controller->setCurrentPosition(59000);
+    m_controller->pause();
+    m_controller->setCurrentPosition(60000);
+    m_controller->syncPlayStateFromEngine(Player::PlayState::Paused);
+    m_controller->play();
+    m_controller->setCurrentPosition(90000);
+    EXPECT_EQ(corePlayed.count(), 0);
+    EXPECT_EQ(m_cache->count(), 1);
+    const auto* lastFmCache = m_scrobbler->service(u"LastFM"_s)->findChild<ScrobblerCache*>();
+    ASSERT_NE(lastFmCache, nullptr);
+    EXPECT_EQ(lastFmCache->count(), 1);
+    const auto* libreFmCache = m_scrobbler->service(u"LibreFM"_s)->findChild<ScrobblerCache*>();
+    ASSERT_NE(libreFmCache, nullptr);
+    EXPECT_EQ(libreFmCache->count(), 1);
+    const auto* listenBrainzCache = m_scrobbler->service(u"ListenBrainz"_s)->findChild<ScrobblerCache*>();
+    ASSERT_NE(listenBrainzCache, nullptr);
+    EXPECT_EQ(listenBrainzCache->count(), 1);
+}
+
+TEST_F(RemotePlaybackTest, RestoredPausedPlaybackIsNotSubmittedAfterResume)
+{
+    const Track track = makeTrack(u"https://music.example.test/restored-paused.flac"_s, 12, 120000);
+    m_controller->commitCurrentTrack(track);
+    m_controller->syncPlayStateFromEngine(Player::PlayState::Paused);
+    m_controller->restorePlaybackProgress(90000, 90000);
+    m_controller->play();
+    m_controller->setCurrentPosition(100000);
+    EXPECT_EQ(m_cache->count(), 0);
+}
+
 TEST_F(RemotePlaybackTest, RestoredCompletedPlaybackIsNotSubmittedAgain)
 {
     const Track track = makeTrack(u"https://music.example.test/restored.flac"_s, 6, 120000);

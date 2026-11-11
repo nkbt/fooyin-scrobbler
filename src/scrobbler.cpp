@@ -69,6 +69,7 @@ Scrobbler::Scrobbler(PlayerController* playerController, MusicLibrary* library,
     , m_settings{settings}
     , m_dbPool{std::move(dbPool)}
     , m_playedThresholdReached{playerController->playedThresholdReached()}
+    , m_pausedDuringPlayback{false}
 {
     addDefaultServices();
     restoreServices();
@@ -207,6 +208,8 @@ void Scrobbler::timerEvent(QTimerEvent* event)
 
 void Scrobbler::handlePlayStateChanged(Player::PlayState state, Player::PlayState previous)
 {
+    m_pausedDuringPlayback = state == Player::PlayState::Paused && previous == Player::PlayState::Playing;
+
     if(previous == Player::PlayState::Stopped && state == Player::PlayState::Playing) {
         m_playedThresholdReached = m_playerController->playedThresholdReached();
         const Track track        = m_playerController->currentTrack();
@@ -226,7 +229,8 @@ void Scrobbler::scrobbleRemotePlayback()
     }
 
     const Track track = m_playerController->currentTrack();
-    if(track.isRemote() && m_playerController->playState() == Player::PlayState::Playing) {
+    // The engine can still deliver a position that crosses the threshold after a pause request
+    if(track.isRemote() && (m_playerController->playState() == Player::PlayState::Playing || m_pausedDuringPlayback)) {
         scrobble(track);
     }
 }

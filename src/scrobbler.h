@@ -113,6 +113,7 @@ private:
     std::unordered_map<QString, RemoteLovedState> m_selectedRemoteLoved;
     QBasicTimer m_nowPlayingTimer;
     bool m_playedThresholdReached;
+    bool m_pausedDuringPlayback;
 };
 } // namespace Scrobbler
 } // namespace Fooyin
