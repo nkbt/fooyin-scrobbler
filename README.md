@@ -26,7 +26,7 @@ Tests use synthetic metadata, isolated account/cache files and in-memory network
 
 ## macOS
 
-Use the same fooyin SDK, Qt installation and compiler as the host app. For Jellyfin playback, use the [`external-libraries` host branch](https://github.com/nkbt/fooyin/tree/external-libraries) and the [Jellyfin macOS instructions](https://github.com/nkbt/fooyin-jellyfin#macos). Configure the host with `-DINSTALL_HEADERS=ON -DPLUGIN_SELECTION=-scrobbler` to exclude the bundled scrobbler.
+Use the same fooyin SDK, Qt installation and compiler as the host app. For Jellyfin playback, use the [`external-libraries` host branch](https://github.com/nkbt/fooyin/tree/external-libraries) and the [Jellyfin macOS instructions](https://github.com/nkbt/fooyin-jellyfin/blob/accounts/README.md#macos) on the `accounts` branch. Configure the host with `-DINSTALL_HEADERS=ON -DPLUGIN_SELECTION=-scrobbler` to exclude the bundled scrobbler.
 
 Set `FOOYIN_PREFIX` to the development SDK prefix and `FOOYIN_INSTALL_PREFIX` to the app installation prefix. The Jellyfin instructions define both variables. Keep the development SDK separate from the deployed app so tests load one copy of Qt:
 
@@ -41,6 +41,6 @@ The installed module is `fooyin.app/Contents/PlugIns/fyplugin_scrobbler.so`. Kee
 
 The host bundle includes the SDL3 runtime when Homebrew provides SDL2-compat. Enable the SDL2 plugin if the source profile disables it. Use `SDL2 (coreaudio)` with the default device when copying audio settings from Linux.
 
-The module retains the scrobbler settings and service identities. Copy `fooyin.conf` and the account database in `fooyin.db` when moving a profile. Current authentication data resides in the database. The host imports legacy credentials from `fooyin.conf` when no database account exists. Keep profile directories and backups private because `AccountStore` stores account values without encryption.
+The module retains the scrobbler settings and service identities. Before you copy a profile, close fooyin on the source and the destination, and back up the destination profile directories. The [profile move instructions](https://github.com/nkbt/fooyin-jellyfin/blob/accounts/README.md#move-a-profile-to-macos) list the Linux and macOS directories. Copy `fooyin.conf` and the account database in `fooyin.db` when moving a profile. Current authentication data resides in the database. The host imports legacy credentials from `fooyin.conf` when no database account exists. Keep profile directories and backups private because `AccountStore` stores account values without encryption.
 
 Released under GPL-3.0-or-later. Original copyright notices are retained. See [COPYING](COPYING).
