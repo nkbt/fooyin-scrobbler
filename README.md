@@ -39,7 +39,7 @@ cmake --install tmp/macos-build
 
 The installed module is `fooyin.app/Contents/PlugIns/fyplugin_scrobbler.so`. Keep one scrobbler module in the app bundle. After installing both external plugins, run the host bundle deployment and sign the complete app as described in the Jellyfin instructions. Complete each installation command before starting the next command.
 
-The host bundle includes the SDL3 runtime when Homebrew provides SDL2-compat. Use `SDL2 (coreaudio)` with the default device when copying audio settings from Linux.
+The host bundle includes the SDL3 runtime when Homebrew provides SDL2-compat. Enable the SDL2 plugin if the source profile disables it. Use `SDL2 (coreaudio)` with the default device when copying audio settings from Linux.
 
 The module retains the scrobbler settings and service identities. Copy `fooyin.conf` and the account database in `fooyin.db` when moving a profile. Current authentication data resides in the database. The host imports legacy credentials from `fooyin.conf` when no database account exists. Keep profile directories and backups private because `AccountStore` stores account values without encryption.
 
