@@ -127,11 +127,11 @@ public:
     {
         return {};
     }
-    std::optional<LibraryInfo> addExternalLibrary(const QString&, const QString&)
+    std::optional<LibraryInfo> addExternalLibrary(const QString&, const QString&) override
     {
         return {};
     }
-    void applyExternalLibrarySnapshot(const LibraryInfo&, const TrackList&, const QUuid&) { }
+    void applyExternalLibrarySnapshot(const LibraryInfo&, const TrackList&, const QUuid&) override { }
 };
 
 class TestReply : public QNetworkReply
